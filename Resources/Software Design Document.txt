@@ -1,0 +1,29 @@
+App Controller
+	Host User Search Bar
+      Validate_username()
+		Search_username() - Get information, and send inside callback function.
+		Override_username()
+	get_PUUID(), get_games(), get_mastery(), get_assets(character_id) 
+      Swap Scenes from available scenes
+		Error, Not Found, Player Stats
+	Create game UI Elements Dynamically from Game Dictionary
+	get_stats() - From the Dictionary of past games, collect data about the player
+		Most Played Character, W/L, W/L per Lane, Rank, Region
+	Init must get lost of information regarding the player from PUUID
+Game Dictionary
+Game ID :
+	Players : {Character ID, Team, Lane, Level, Runes, Sorcerer Spells, Items, Trinket,  KDA, CS, GOLD}
+	Duration
+	Time Stamp
+	Result : Team1, Team2, Tie, Abandoned
+	Map
+	Picks & Bans
+Player Dictionary
+	User ID
+	User UUID
+	User Region
+      List of Game ID�s
+      Character Icon
+	Summoner Level
+
+
