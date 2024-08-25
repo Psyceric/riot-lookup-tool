@@ -1,10 +1,12 @@
 from tkinter import *
 from enum import Enum
 from riot_api import RiotAPI
+import requests
 # Search bar
     # Validate Username
     # Search Username
     # Override Username
+
 
 class AppController():
     
