@@ -1,20 +1,53 @@
 import requests
-from ratelimit import limits, sleep_and_retry, RateLimitException
-from backoff import on_predicate, on_exception, expo
-from threading import Thread, _active
+from threading import Thread, _active, Event, RLock
+import sys
+from math import floor
 import time
-import sqlite3
-import ctypes
+
+now = time.monotonic if hasattr(time, 'monotonic') else time.time
+
+class RateLimit():
+    def __init__(self, calls=15, period=900, clock=now):
+        self.clamped_calls = max(1, min(sys.maxsize, floor(calls)))
+        self.period = period
+        self.clock = clock
+
+        # Initialise the decorator state.
+        self.last_reset = clock()
+        self.num_calls = 0
+
+        # Add thread safety.
+        self.lock = RLock()
+
+    def __period_remaining(self):
+        elapsed = self.clock() - self.last_reset
+        return self.period - elapsed
+
+    def __call__(self):
+        with self.lock:
+            period_remaining = self.__period_remaining()
+
+            # If the time window has elapsed then reset.
+            if period_remaining <= 0:
+                self.num_calls = 0
+                self.last_reset = self.clock()
+
+            # Increase the number of attempts to call the function.
+            self.num_calls += 1
+
+            # If the number of attempts to call the function exceeds the
+            # maximum then raise an exception.
+            if self.num_calls > self.clamped_calls:
+                return True
+            return False
 
 class RiotAPI():
     region : str
     api_key : str
     cache = []
-    variable_name : Thread
+    _attempt_thread : Thread
 
-
-    RATE_LIMIT_SECOND = 20 
-    RATE_LIMIT_TWO_MINUTE = 60
+    # Create QUEUE of requests that are set to be sent out.
 
     def learning(self):
         for x in range(0,90):
@@ -22,26 +55,44 @@ class RiotAPI():
             self.attempt_request(x)
         pass
 
-    def __init__(self, api_key : str, region : str):
-        self.variable_name = Thread(target = self.learning, daemon = True)
-        self.variable_name.start()
-        time.sleep(3)
-        print("TEST")
-        self.api_key = api_key
-        self.region = region
-        _name = "Psyceric"
-        _tag = "773"
-        test  = "https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{NAME}/{TAG}".format(REGION = region, NAME = _name, TAG = _tag)
-        url = RiotAPI.assemble_url(test, api_key = api_key, count = 1)
-        self.variable_name.join()
-        time.sleep(5)
-        print("Slept")
+    # def __init__(self, api_key : str, region : str):
+    #     self.variable_name = Thread(target = self.learning, daemon = True)
+    #     self.variable_name.start()
+    #     time.sleep(3)
+    #     print("TEST")
+    #     self.api_key = api_key
+    #     self.region = region
+    #     _name = "Psyceric"
+    #     _tag = "773"
+    #     test  = "https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{NAME}/{TAG}".format(REGION = region, NAME = _name, TAG = _tag)
+    #     url = RiotAPI.assemble_url(test, api_key = api_key, count = 1)
+    #     self.variable_name.join()
+    #     time.sleep(5)
+    #     print("Slept")
 
-    @limits(calls = RATE_LIMIT_SECOND, period = 1)
-    @limits(calls = RATE_LIMIT_TWO_MINUTE, period = 120)
+    def __init__(self, api_key : str, region : str):
+        self.current_request = r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-90c6c992-0078-4122-b166-cf437de40b0b"
+        self.limitA = RateLimit(calls=20, period=1)
+        self.limitB = RateLimit(calls=60, period=120)
+        for x in range(0,100):
+            self.attempt_request(x)
+            
+
     def attempt_request(self, url):
-            print(url)
-            time.sleep(.05)
+        _failure_event = Event()
+        self._attempt_thread = Thread(target=self.send_request, kwargs = {'_fail_event' : _failure_event, 'url' : url})
+        self._attempt_thread.start()
+        self._attempt_thread.join()
+        if _failure_event.is_set():
+            print("Rate Limited :", now())
+        time.sleep(.1)
+
+    def send_request(self, _fail_event , url):
+        if self.limitA() or self.limitB():
+            _fail_event.set()
+        else:
+            print(url) # Try Request...
+        
 
     @staticmethod
     def assemble_url(url, **parameters):
