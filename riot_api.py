@@ -1,31 +1,47 @@
 import requests
 from ratelimit import limits, sleep_and_retry, RateLimitException
-from backoff import on_predicate, on_exception, constant
+from backoff import on_predicate, on_exception, expo
+from threading import Thread, _active
+import time
+import sqlite3
+import ctypes
+
 class RiotAPI():
     region : str
     api_key : str
     cache = []
+    variable_name : Thread
+
 
     RATE_LIMIT_SECOND = 20 
     RATE_LIMIT_TWO_MINUTE = 60
 
+    def learning(self):
+        for x in range(0,90):
+            #print(x)
+            self.attempt_request(x)
+        pass
+
     def __init__(self, api_key : str, region : str):
+        self.variable_name = Thread(target = self.learning, daemon = True)
+        self.variable_name.start()
+        time.sleep(3)
+        print("TEST")
         self.api_key = api_key
         self.region = region
         _name = "Psyceric"
         _tag = "773"
         test  = "https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{NAME}/{TAG}".format(REGION = region, NAME = _name, TAG = _tag)
         url = RiotAPI.assemble_url(test, api_key = api_key, count = 1)
-        for x in range(0,90):
-            #print(x)
-            self.attempt_request(x)
+        self.variable_name.join()
+        time.sleep(5)
+        print("Slept")
 
-    # @on_predicate(constant, jitter=None, interval=.125)
-    @on_exception(constant, TimeoutError, max_tries=10)
     @limits(calls = RATE_LIMIT_SECOND, period = 1)
-    @limits(calls=RATE_LIMIT_TWO_MINUTE, period=120)
+    @limits(calls = RATE_LIMIT_TWO_MINUTE, period = 120)
     def attempt_request(self, url):
             print(url)
+            time.sleep(.05)
 
     @staticmethod
     def assemble_url(url, **parameters):
