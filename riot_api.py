@@ -1,8 +1,11 @@
 import requests
 from threading import Thread, _active, Event, RLock
 import sys
+from save_thread_result import ThreadWithResult, _runOverrideThreadWithResult
 from math import floor
+from queue import Queue
 import time
+import json
 
 now = time.monotonic if hasattr(time, 'monotonic') else time.time
 
@@ -41,19 +44,116 @@ class RateLimit():
                 return True
             return False
 
-class RiotAPI():
+class ExponentialTimer():
+    current_iteration : int = 0
+    enabled : bool  = True
+    hold_time : float 
+    total_elapsed : float 
+    def __init__(self, give_up_threshold : float, multiplier : float = .5, exponent : float = 2, offset_y : float = 0, offset_x : float = 0):
+        self.multiplier = multiplier
+        self.exponent = exponent
+        self.offset_y = offset_y
+        self.offset_x = offset_x
+        self.give_up_threshold = give_up_threshold
+        self.hold_time = 0
+        self.total_elapsed = 0
+
+    def iterate(self):
+        self.current_iteration += 1
+        print(self.give_up_threshold , " - ", self.current_iteration)
+        self.hold_time = ((self.multiplier * self.current_iteration) + self.offset_x) ** self.exponent + self.offset_y
+        self.total_elapsed = self.total_elapsed + self.hold_time
+        print("Elapsed Time : {0}\nTrying Again in... {1}".format(self.total_elapsed, self.hold_time))
+        if self.give_up_threshold <= 0: return self.hold_time
+        if self.give_up_threshold <= self.current_iteration :
+            self.enabled = False
+            return False
+        return self.hold_time
+
+            
+        
+
+class MyRequest():
+    attempt_thread : ThreadWithResult
+    rate_limits : list[RateLimit]
+    request_results : json
+
+    def __init__(self, request_url, rate_limits: list[RateLimit] | RateLimit = RateLimit(20,1), retry : bool = True, intreval : int = 10, **kwargs):
+        self.request_url = request_url
+        self.payload = dict(kwargs)
+        self.rate_limits = rate_limits
+        self.retry = retry
+        self.interval = intreval
+
+    def attempt_request(self):
+
+        """
+        
+        #TODO: Impliment Locks to create threads safely, Impliment Request Retry with exponential cooldown
+        
+        """
+
+        _rate_overflow_event = Event()
+        _fail_event = Event()
+        _expo_timer = ExponentialTimer(give_up_threshold=0)
+        response : _runOverrideThreadWithResult = None
+        status_code = 0
+        while _expo_timer.enabled and status_code is not 200:
+            self.attempt_thread = ThreadWithResult(target=self.send_request, kwargs = {'_rate_overflow_event' : _rate_overflow_event, '_fail_event' : _fail_event})
+            self.attempt_thread.start()
+            self.attempt_thread.join()
+            response = self.attempt_thread
+            if hasattr(response.result, "status_code"):
+                status_code = response.result.status_code
+                if status_code == 200:
+                    print("Fetching Response Value...\n",response.result.json(), "\n")
+                    return response.result.json()
+            print("--------",status_code)
+            if _rate_overflow_event.is_set():
+                print("Rate Overflow... Retrying")
+            elif _fail_event.is_set():
+                print("Unable to complete request... Status Code : ", status_code)
+            _expo_timer.iterate()
+            if _expo_timer.enabled: 
+                time.sleep(_expo_timer.hold_time)
+
+
+    def send_request(self, _rate_overflow_event, _fail_event):
+        if [x for x in self.rate_limits if x() is True]:
+            _rate_overflow_event.set()
+            return
+        #print("Base" , r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-60922bae-ab77-41a3-b37a-67de1ae7ebe1")
+        my_response = requests.get(self.request_url, params= self.payload)
+        self.pretty_print_POST(my_response.request)
+        if my_response.status_code is not 200:
+            _fail_event.set()
+            return
+        print('Response Code :' , my_response.status_code)
+        return my_response
+        #print(my_response.json()['puuid'])
+        
+
+    def pretty_print_POST(self,req):
+        """
+        At this point it is completely built and ready
+        to be fired; it is "prepared".
+
+        However pay attention at the formatting used in 
+        this function because it is programmed to be pretty 
+        printed and may differ from the actual request.
+        """
+        print('{}\n{}\r\n{}\r\n\r\n{}'.format(
+            '-----------START-----------',
+            req.method + ' ' + req.url,
+            '\r\n'.join('{}: {}'.format(k, v) for k, v in req.headers.items()),
+            req.body,
+        ))
+
+class RiotAPI():  
     region : str
     api_key : str
-    cache = []
-    _attempt_thread : Thread
-
-    # Create QUEUE of requests that are set to be sent out.
-
-    def learning(self):
-        for x in range(0,90):
-            #print(x)
-            self.attempt_request(x)
-        pass
+    request_queue : Queue
+    
 
     # def __init__(self, api_key : str, region : str):
     #     self.variable_name = Thread(target = self.learning, daemon = True)
@@ -71,39 +171,22 @@ class RiotAPI():
     #     print("Slept")
 
     def __init__(self, api_key : str, region : str):
-        self.current_request = r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-90c6c992-0078-4122-b166-cf437de40b0b"
-        self.limitA = RateLimit(calls=20, period=1)
-        self.limitB = RateLimit(calls=60, period=120)
-        for x in range(0,100):
-            self.attempt_request(x)
-            
+        self.current_request = r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773"
+        self.request_queue = Queue()
+        limitA = RateLimit(calls=20, period=1)
+        limitB = RateLimit(calls=60, period=120)
+        for x in range(0,90):
+            #print(x)
+            my_request = MyRequest(self.current_request,[limitA, limitB], api_key = api_key)
+            my_request.attempt_request()
 
-    def attempt_request(self, url):
-        _failure_event = Event()
-        self._attempt_thread = Thread(target=self.send_request, kwargs = {'_fail_event' : _failure_event, 'url' : url})
-        self._attempt_thread.start()
-        self._attempt_thread.join()
-        if _failure_event.is_set():
-            print("Rate Limited :", now())
-        time.sleep(.1)
 
-    def send_request(self, _fail_event , url):
-        if self.limitA() or self.limitB():
-            _fail_event.set()
-        else:
-            print(url) # Try Request...
-        
+    def queue_request(self, url):
+        self.request_queue.put(url)
 
-    @staticmethod
-    def assemble_url(url, **parameters):
-        if parameters is not None:
-            for count, param in enumerate(parameters.items()):
-                url_id = '&'
-                if count == 0:
-                    url_id = '?'
-                url += '{url_id}{key}={value}'.format(url_id = url_id, key=param[0],value = param[1])
-        return url
 
+
+    
     """def account_info(self, username, tag):
         pass
 
@@ -152,6 +235,6 @@ class RiotAPI():
 
 if __name__ == "__main__":   
      
-    key = r"RGAPI-90c6c992-0078-4122-b166-cf437de40b0b"
+    key = r"RGAPI-c1ae88f9-5189-4281-a2bc-b699f2be919d"
     region = "americas"
     myapp = RiotAPI(key, region)
