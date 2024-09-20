@@ -1,11 +1,8 @@
-import requests
+import sys, time, json, requests
 from threading import Thread, _active, Event, RLock
-import sys
 from save_thread_result import ThreadWithResult, _runOverrideThreadWithResult
 from math import floor
 from queue import Queue
-import time
-import json
 
 now = time.monotonic if hasattr(time, 'monotonic') else time.time
 
@@ -70,29 +67,18 @@ class ExponentialTimer():
             return False
         return self.hold_time
 
-            
-        
-
 class MyRequest():
     attempt_thread : ThreadWithResult
     rate_limits : list[RateLimit]
     request_results : json
+    name = "JOE"
 
-    def __init__(self, request_url, rate_limits: list[RateLimit] | RateLimit = RateLimit(20,1), retry : bool = True, intreval : int = 10, **kwargs):
+    def __init__(self, request_url, rate_limits: list[RateLimit] | RateLimit = RateLimit(20,1), **payload):
         self.request_url = request_url
-        self.payload = dict(kwargs)
+        self.payload = dict(payload)
         self.rate_limits = rate_limits
-        self.retry = retry
-        self.interval = intreval
 
     def attempt_request(self):
-
-        """
-        
-        #TODO: Impliment Locks to create threads safely, Impliment Request Retry with exponential cooldown
-        
-        """
-
         _rate_overflow_event = Event()
         _fail_event = Event()
         _expo_timer = ExponentialTimer(give_up_threshold=0)
@@ -106,7 +92,8 @@ class MyRequest():
             if hasattr(response.result, "status_code"):
                 status_code = response.result.status_code
                 if status_code == 200:
-                    print("Fetching Response Value...\n",response.result.json(), "\n")
+                    #print("Fetching Response Value...\n",response.result.json(), "\n")
+                    print("Fetching Results")
                     return response.result.json()
             print("--------",status_code)
             if _rate_overflow_event.is_set():
@@ -116,23 +103,24 @@ class MyRequest():
             _expo_timer.iterate()
             if _expo_timer.enabled: 
                 time.sleep(_expo_timer.hold_time)
-
+    # Add logger logic to document status codes and association to the request event.
+    # TODO : Properly pass in attempt_request information, regarding URL, and Payload. 
 
     def send_request(self, _rate_overflow_event, _fail_event):
         if [x for x in self.rate_limits if x() is True]:
             _rate_overflow_event.set()
             return
         #print("Base" , r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-60922bae-ab77-41a3-b37a-67de1ae7ebe1")
-        my_response = requests.get(self.request_url, params= self.payload)
+        my_response = requests.get(self.request_url, params = self.payload)
         self.pretty_print_POST(my_response.request)
         if my_response.status_code is not 200:
             _fail_event.set()
             return
         print('Response Code :' , my_response.status_code)
+        self.request_results = my_response
         return my_response
         #print(my_response.json()['puuid'])
         
-
     def pretty_print_POST(self,req):
         """
         At this point it is completely built and ready
@@ -151,90 +139,55 @@ class MyRequest():
 
 class RiotAPI():  
     region : str
-    api_key : str
+    platform_id : str
+    APIKEY : str
     request_queue : Queue
-    
+    rate_limits : list[RateLimit]
 
-    # def __init__(self, api_key : str, region : str):
-    #     self.variable_name = Thread(target = self.learning, daemon = True)
-    #     self.variable_name.start()
-    #     time.sleep(3)
-    #     print("TEST")
-    #     self.api_key = api_key
-    #     self.region = region
-    #     _name = "Psyceric"
-    #     _tag = "773"
-    #     test  = "https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{NAME}/{TAG}".format(REGION = region, NAME = _name, TAG = _tag)
-    #     url = RiotAPI.assemble_url(test, api_key = api_key, count = 1)
-    #     self.variable_name.join()
-    #     time.sleep(5)
-    #     print("Slept")
-
-    def __init__(self, api_key : str, region : str):
-        self.current_request = r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773"
+    def __init__(self, region : str, platform_id : str, api_key : str):
+        
+        self.region = region
+        self.platform_id = platform_id
+        self.APIKEY = api_key
         self.request_queue = Queue()
         limitA = RateLimit(calls=20, period=1)
         limitB = RateLimit(calls=60, period=120)
-        for x in range(0,90):
-            #print(x)
-            my_request = MyRequest(self.current_request,[limitA, limitB], api_key = api_key)
-            my_request.attempt_request()
+        self.rate_limits = [limitA, limitB]
 
+    def queue_request(self, url, **payload):
+        self.request_queue.put(MyRequest(url, self.rate_limits, **payload))
 
-    def queue_request(self, url):
-        self.request_queue.put(url)
+    def GET_puuid(self, game_name, tag_line):
+        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{_game_name}/{_tag_line}".format(region = self.region, _game_name = game_name, _tag_line = tag_line)
+        payload = {"api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
 
+    def GET_matches(self, puuid, count = 20, **params):
+        url = "https://{region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{_puuid}/ids".format(region = self.region, _puuid = puuid)
+        payload = dict(params) | {"count" : count, "api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
 
+    def GET_players(self, queue = "RANKED_SOLO_5x5", tier = "CHALLENGER", division = "I", page = 1):
+        url = "https://{platform}.api.riotgames.com/lol/league-exp/v4/entries/{queue}/{tier}/{division}".format(platform = self.platform_id, queue = queue, tier = tier, division = division)
+        payload = {"page" : page, "api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
 
+    def GET_match_data(self, match_id):
+        url = "https://{region}.api.riotgames.com/lol/match/v5/matches/{match_id}".format(region = self.region, match_id = match_id)
+        payload = {"api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
     
-    """def account_info(self, username, tag):
-        pass
+    def GET_summoner_by_summoner_id(self, summoner_id):
+        url = "https://{platform_id}.api.riotgames.com/lol/summoner/v4/summoners/{summoner_id}".format(platform_id = self.platform_id, summoner_id = summoner_id)
+        payload = {"api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
+    
+    def GET_summoner_by_puuid(self, puuid):
+        url = "https://{platform_id}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}".format(platform_id = self.platform_id, puuid = puuid)
+        payload = {"api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
 
-    def get_PUUID(self, username):
-
-        # RIOT API Call to get PUUID from username
-        # https://{region}.api.riotgames.com
-        # /riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}?{api_key =Key}
-        # https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-90c6c992-0078-4122-b166-cf437de40b0b
-
-        # Returns:
-        # {"puuid":"g8qIcET1Jh994x69PaN5rJ0UcEbo8TtAJGDd66MwezLG9MzlhBUlCma5H--87m8tqYXpEFZsluLBqw","gameName":"Psyceric","tagLine":"773"} dict
-
-        pass
-    def get_matches(self, count, PUUID):
-        # RIOT API Call to get dict of previous games
-        # /lol/match/v5/matches/by-puuid/{puuid}/ids&{api_key = Key}
-
-        # Returns 
-        # [
-        # "NA1_4887498560",
-        # "NA1_4887465300",
-        # "NA1_4887425408",
-        # ...]
-
-        pass
-
-    def get_summoner(self, PUUID):
-        # RIOT API Call to get summoner Mastery
-        # /lol/summoner/v4/summoners/by-puuid/{encryptedPUUID}&{count = count}&{api_key = Key}
-
-        # Returns 
-        # {
-        # "id": "5SMTK8DTh8kMHOEl_zkw2667KsMBxTROCloaOboQ-JDz19Q",
-        # "accountId": "A1d4SbmmvKDzRBls753FJjmOeu5M5vir7KUwFLkgYimma4A",
-        # "puuid": "paTeopWaB8znvUgQRJtgUsIxXNOoxH9d7N1DD0TtsfDrnekdOC5Y0wyycrP8h6EvQqyn9i8fs1iVXg",
-        # "profileIconId": 5408,
-        # "revisionDate": 1704939516000,
-        # "summonerLevel": 75
-        # }
-        pass
-
-    def get_assets(self, character_id):
-        # RIOT API Call to get character assets from DDragon
-        pass"""
-
-if __name__ == "__main__":   
-     
-    key = r"RGAPI-c1ae88f9-5189-4281-a2bc-b699f2be919d"
-    region = "americas"
-    myapp = RiotAPI(key, region)
+    def GET_account_by_puuid(self, puuid):
+        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}"
+        payload = {"api_key" : self.APIKEY}
+        self.queue_request(url=url, **payload)
