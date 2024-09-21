@@ -1,0 +1,98 @@
+{
+    "player_performance_id" : 1,
+    "match_id" : "NA1_5111458077",
+    "local_player_id" : 1,
+    "participantId": 1,
+    "championId": 150,
+    "championName": "Gnar",
+    "champLevel": 11,
+    "role": "SUPPORT",
+    "teamPosition": "TOP",
+    "kills": 0,
+    "deaths": 5,
+    "assists": 1,
+    "goldEarned": 5056,
+    "goldSpent": 3925,
+    "perks": {
+        "statPerks": {
+            "defense": 5011,
+            "flex": 5008,
+            "offense": 5005
+        },
+        "styles": [
+            {
+                "description": "primaryStyle",
+                "selections": [
+                    {
+                        "perk": 8021,
+                        "var1": 708,
+                        "var2": 0,
+                        "var3": 0
+                    },
+                    {
+                        "perk": 9101,
+                        "var1": 394,
+                        "var2": 0,
+                        "var3": 0
+                    },
+                    {
+                        "perk": 9104,
+                        "var1": 0,
+                        "var2": 0,
+                        "var3": 0
+                    },
+                    {
+                        "perk": 8299,
+                        "var1": 478,
+                        "var2": 0,
+                        "var3": 0
+                    }
+                ],
+                "style": 8000
+            },
+            {
+                "description": "subStyle",
+                "selections": [
+                    {
+                        "perk": 8451,
+                        "var1": 120,
+                        "var2": 0,
+                        "var3": 0
+                    },
+                    {
+                        "perk": 8444,
+                        "var1": 746,
+                        "var2": 0,
+                        "var3": 0
+                    }
+                ],
+                "style": 8400
+            }
+        ]
+    },
+    "summoner1Id": 12,
+    "summoner2Id": 4,
+    "item0": 1055,
+    "item1": 2031,
+    "item2": 3111,
+    "item3": 3044,
+    "item4": 3057,
+    "item5": 0,
+    "item6": 3340,
+    "visionScore": 11,
+    "physicalDamageDealt": 50921,
+    "physicalDamageDealtToChampions": 10138,
+    "physicalDamageTaken": 6230,
+    "magicDamageDealt": 2313,
+    "magicDamageDealtToChampions": 1322,
+    "magicDamageTaken": 6694,
+    "trueDamageDealt": 186,
+    "trueDamageDealtToChampions": 0,
+    "trueDamageTaken": 608,
+    "totalDamageDealt": 53421,
+    "totalDamageDealtToChampions": 11460,
+    "totalDamageTaken": 13533,
+    "totalHeal": 1447,
+    "totalMinionsKilled": 122,
+    "win": false
+}

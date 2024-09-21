@@ -158,7 +158,8 @@ class RiotAPI():
         self.request_queue.put(MyRequest(url, self.rate_limits, **payload))
 
     def GET_puuid(self, game_name, tag_line):
-        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{_game_name}/{_tag_line}".format(region = self.region, _game_name = game_name, _tag_line = tag_line)
+        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{_game_name}/{_tag_line}"\
+            .format(region = self.region, _game_name = game_name, _tag_line = tag_line)
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 
@@ -168,7 +169,8 @@ class RiotAPI():
         self.queue_request(url=url, **payload)
 
     def GET_players(self, queue = "RANKED_SOLO_5x5", tier = "CHALLENGER", division = "I", page = 1):
-        url = "https://{platform}.api.riotgames.com/lol/league-exp/v4/entries/{queue}/{tier}/{division}".format(platform = self.platform_id, queue = queue, tier = tier, division = division)
+        url = "https://{platform}.api.riotgames.com/lol/league-exp/v4/entries/{queue}/{tier}/{division}"\
+            .format(platform = self.platform_id, queue = queue, tier = tier, division = division)
         payload = {"page" : page, "api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 

@@ -1,9 +1,20 @@
 import sqlite3
 
-server = sqlite3.connect("Server.db")
+server = sqlite3.connect("Test.db")
 cur = server.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS newtable (id int,data int)")
-cur.execute("INSERT INTO newtable VALUES (?,?)",(1,1))
-cur.execute("INSERT INTO newtable VALUES (?,?)",(1,2))
-cur.execute("INSERT INTO newtable VALUES (?,?)",(1,3))
+cur.execute('''CREATE TABLE IF NOT EXISTS Media(
+                id INTEGER PRIMARY KEY, title TEXT, 
+                type TEXT,
+                onchapter INTEGER,  chapters INTEGER,
+                status TEXT
+                )''')
+values = {
+    'id':3, 'title':'jack', 'type':None,
+    'onchapter':None,'chapters':6,'status':'Ongoing'
+}
+cur.execute(
+    """INSERT INTO Media (onchapter, chapters, status)
+     VALUES (:onchapter, :chapters, :status);""", 
+    values
+)
 server.commit()
