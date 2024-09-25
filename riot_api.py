@@ -1,8 +1,9 @@
-import sys, time, json, requests
+import sys, time, json, requests, time
 from threading import Thread, _active, Event, RLock
 from save_thread_result import ThreadWithResult, _runOverrideThreadWithResult
 from math import floor
 from queue import Queue
+from league_relay import LeagueInterfact
 
 now = time.monotonic if hasattr(time, 'monotonic') else time.time
 
@@ -84,7 +85,7 @@ class MyRequest():
         _expo_timer = ExponentialTimer(give_up_threshold=0)
         response : _runOverrideThreadWithResult = None
         status_code = 0
-        while _expo_timer.enabled and status_code is not 200:
+        while _expo_timer.enabled and status_code != 200:
             self.attempt_thread = ThreadWithResult(target=self.send_request, kwargs = {'_rate_overflow_event' : _rate_overflow_event, '_fail_event' : _fail_event})
             self.attempt_thread.start()
             self.attempt_thread.join()
@@ -113,7 +114,7 @@ class MyRequest():
         #print("Base" , r"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/psyceric/773?api_key=RGAPI-60922bae-ab77-41a3-b37a-67de1ae7ebe1")
         my_response = requests.get(self.request_url, params = self.payload)
         self.pretty_print_POST(my_response.request)
-        if my_response.status_code is not 200:
+        if my_response.status_code != 200:
             _fail_event.set()
             return
         print('Response Code :' , my_response.status_code)
@@ -137,59 +138,52 @@ class MyRequest():
             req.body,
         ))
 
-class RiotAPI():  
-    region : str
-    platform_id : str
-    APIKEY : str
+class RiotAPI(LeagueInterfact):  
     request_queue : Queue
     rate_limits : list[RateLimit]
+    name = "RiotAPI"
 
-    def __init__(self, region : str, platform_id : str, api_key : str):
-        
-        self.region = region
-        self.platform_id = platform_id
-        self.APIKEY = api_key
+    def __init__(self, api_key):
         self.request_queue = Queue()
         limitA = RateLimit(calls=20, period=1)
         limitB = RateLimit(calls=60, period=120)
         self.rate_limits = [limitA, limitB]
+        self.APIKEY = api_key
 
     def queue_request(self, url, **payload):
         self.request_queue.put(MyRequest(url, self.rate_limits, **payload))
 
     def GET_puuid(self, game_name, tag_line):
-        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{_game_name}/{_tag_line}"\
-            .format(region = self.region, _game_name = game_name, _tag_line = tag_line)
+        url = f"https://{self.region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 
     def GET_matches(self, puuid, count = 20, **params):
-        url = "https://{region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{_puuid}/ids".format(region = self.region, _puuid = puuid)
+        url = f"https://{self.region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids"
         payload = dict(params) | {"count" : count, "api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 
     def GET_players(self, queue = "RANKED_SOLO_5x5", tier = "CHALLENGER", division = "I", page = 1):
-        url = "https://{platform}.api.riotgames.com/lol/league-exp/v4/entries/{queue}/{tier}/{division}"\
-            .format(platform = self.platform_id, queue = queue, tier = tier, division = division)
+        url = f"https://{self.platform_id}.api.riotgames.com/lol/league-exp/v4/entries/{queue}/{tier}/{division}"
         payload = {"page" : page, "api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 
     def GET_match_data(self, match_id):
-        url = "https://{region}.api.riotgames.com/lol/match/v5/matches/{match_id}".format(region = self.region, match_id = match_id)
+        url = f"https://{self.region}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
     
     def GET_summoner_by_summoner_id(self, summoner_id):
-        url = "https://{platform_id}.api.riotgames.com/lol/summoner/v4/summoners/{summoner_id}".format(platform_id = self.platform_id, summoner_id = summoner_id)
+        url = f"https://{self.platform_id}.api.riotgames.com/lol/summoner/v4/summoners/{summoner_id}"
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
     
     def GET_summoner_by_puuid(self, puuid):
-        url = "https://{platform_id}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}".format(platform_id = self.platform_id, puuid = puuid)
+        url = f"https://{self.platform_id}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
 
     def GET_account_by_puuid(self, puuid):
-        url = "https://{region}.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}"
+        url = f"https://{self.region}.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}"
         payload = {"api_key" : self.APIKEY}
         self.queue_request(url=url, **payload)
