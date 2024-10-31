@@ -27,10 +27,11 @@ class LeagueDatabase(LeagueInterfact):
                     physicalDamageDealt int, physicalDamageDealthToChampions int, physicalDamageTaken int, magicDamageDealth int, 
                     magicDamageDealthToChampions int, magicDamageTaken int, tueDamageDealt int, trueDamageDealtToChampions int, 
                     trueDamageTaken int, totalDamageDealt int, totalDamageDealtToChampions int, totalDamageTaken int, totalHeal int, 
-                    totalMinionsKilled int, win bool)""")
+                    totalMinionsKilled int, win bool)""") #change to player_participation 
         self.database_connection.commit()
 
 def store_profile(self,account_info):
+    # Hard code last_modified, rank, tier, platform, region
     player_profile = dict(self.PROFILE, **account_info)
     self.cursor.execute("""
         INSERT INTO player_profiles (puuid, summonerId, game_name, tag_line, tier, rank, profileIconId, wins, losses, region, platform_id, last_modified, revisionDate)
@@ -38,20 +39,22 @@ def store_profile(self,account_info):
         """,player_profile)
     self.database_connection.commit()
 
-
-def store_deep(self, puuid, summonerId, game_name, tag_line, tier, rank, profileIcon, wins, losses,  revisionDate):
+def store_match(self, match_info):
+    # get region from breaking down match name, first part is platform, and use regions .env to find "key" - check if previously stored in matches db.
+    #str.split('-')[0]?
+  
+    match_details = dict(self.MATCH, **match_info)
+    #TODO: sqlite3 insert command 
     pass
 
-def store_match(self):
+def store_participation(self, participation_info):
+    participation_details = dict(self.PARTICIPANT, **participation_info)
+    #TODO: sqlite3 insert command in player_performance - triggered by relay
     pass
-def store_participation(self):
-    pass
-
-
-
 
 def application_init(self):
     # Get information about league and DDragon, and if we need to update DDragon.
+    #Z
     pass
 def get_loc_from_nametag(self, game_name, tag_line):
     # Get the local_user_id from name and tag
